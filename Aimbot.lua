@@ -2,17 +2,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 
--- Configuration (adjust as needed)
-local Aimbot = {
-    Enabled = true,
-    AimPart = "Head",
-    Sensitivity = 0.3,
-    Prediction = 0.15
-}
-
-local tabToggle = true -- Aimbot ON/OFF toggle with Tab
+local tabToggle = true -- toggle ON/OFF with Tab key
 local aiming = false
 
 -- Input handlers
@@ -21,7 +12,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
     if input.KeyCode == Enum.KeyCode.Tab then
         tabToggle = not tabToggle
-        print("Aimbot " .. (tabToggle and "Enabled" or "Disabled"))
+        print("Auto-attack " .. (tabToggle and "Enabled" or "Disabled"))
     elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
         aiming = true
     end
@@ -32,28 +23,6 @@ UserInputService.InputEnded:Connect(function(input)
         aiming = false
     end
 end)
-
--- Utility: Get best target function (closest to center screen)
-local function GetBestTarget()
-    local closestTarget = nil
-    local shortestDistance = math.huge
-
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(Aimbot.AimPart) then
-            local head = player.Character[Aimbot.AimPart]
-            local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-            if onScreen then
-                local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-                local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    closestTarget = player
-                end
-            end
-        end
-    end
-    return closestTarget
-end
 
 -- Get equipped tool (gun, melee weapon, fists)
 local function GetEquippedTool()
@@ -67,7 +36,7 @@ local function GetEquippedTool()
     return nil
 end
 
--- Try to spam activate/shoot/hit tool functions to bypass cooldown
+-- Spam attack functions to bypass cooldowns
 local function SpamTool(tool)
     if not tool then return end
 
@@ -82,12 +51,12 @@ local function SpamTool(tool)
         tool:Hit()
     end
 
-    -- If tool has a Shoot() method, call it (common for guns)
+    -- For guns: call Shoot() if it exists
     if typeof(tool.Shoot) == "function" then
         tool:Shoot()
     end
 
-    -- If tool has FireRate or ReloadTime properties, try to zero them (if they are ValueObjects)
+    -- Try to zero cooldown properties if present
     if tool:FindFirstChild("FireRate") and typeof(tool.FireRate.Value) == "number" then
         tool.FireRate.Value = 0
     end
@@ -99,18 +68,11 @@ local function SpamTool(tool)
     end
 end
 
--- Main loop: Run every frame to aim and spam hits
+-- Main loop: spam attack every frame when toggled on and aiming
 RunService.RenderStepped:Connect(function()
-    if tabToggle and aiming and Aimbot.Enabled then
-        local target = GetBestTarget()
-        if target and target.Character and target.Character:FindFirstChild(Aimbot.AimPart) then
-            local head = target.Character[Aimbot.AimPart]
-            local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
-            local aimCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
-            Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Aimbot.Sensitivity)
-        end
-
+    if tabToggle and aiming then
         local tool = GetEquippedTool()
         SpamTool(tool)
     end
 end)
+
