@@ -1,4 +1,4 @@
--- Exunys Aimbot V3 (Modified: Tab toggle, right-click aim, closest target priority, no FOV circle)
+-- Exunys Aimbot V3 (Modified: Tab toggle, right-click aim, smooth head-lock)
 
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -11,17 +11,17 @@ local Camera = Workspace.CurrentCamera
 -- Aimbot Settings
 local Aimbot = {
     Enabled = true, -- Master toggle, changed via Tab
-    AimPart = "Head", -- "Head", "UpperTorso", etc.
+    AimPart = "Head", -- Always target head
     TeamCheck = false,
-    Sensitivity = 0, -- Smoothing
-    Prediction = 0.05, -- Adjust for projectile travel time
-    MaxRange = 150 -- Max studs
+    Sensitivity = 0.05, -- Lower = smoother (0.03–0.06 recommended)
+    Prediction = 0.15, -- Adjust for projectile travel time
+    MaxRange = 150
 }
 
 local aiming = false -- Active while right-click held
 local tabToggle = true -- Master ON by default
 
--- Tab key: toggle aimbot system on/off
+-- Toggle system with Tab
 UserInputService.InputBegan:Connect(function(input, gp)
     if not gp then
         if input.KeyCode == Enum.KeyCode.Tab then
@@ -39,10 +39,10 @@ UserInputService.InputEnded:Connect(function(input, gp)
     end
 end)
 
--- Get best target
+-- Find closest player to you AND screen center
 local function GetBestTarget()
     local bestTarget = nil
-    local closestScreenDist = math.huge
+    local closestScore = math.huge
     local myChar = LocalPlayer.Character
     if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
     local myPos = myChar.HumanoidRootPart.Position
@@ -56,15 +56,17 @@ local function GetBestTarget()
                 continue
             end
 
-            local partPos = plr.Character[Aimbot.AimPart].Position
-            local dist3D = (partPos - myPos).Magnitude
+            local head = plr.Character[Aimbot.AimPart]
+            local dist3D = (head.Position - myPos).Magnitude
             if dist3D <= Aimbot.MaxRange then
-                local predictedPos = partPos + (plr.Character:FindFirstChild("HumanoidRootPart").Velocity * Aimbot.Prediction)
+                local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
                 local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
                 if onScreen then
+                    -- Combined score: distance to player + screen center offset
                     local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                    if screenDist < closestScreenDist then
-                        closestScreenDist = screenDist
+                    local score = dist3D + (screenDist / 50) -- weight center more
+                    if score < closestScore then
+                        closestScore = score
                         bestTarget = plr
                     end
                 end
@@ -74,16 +76,15 @@ local function GetBestTarget()
     return bestTarget
 end
 
--- Main aim loop
+-- Main loop
 RunService.RenderStepped:Connect(function()
     if tabToggle and aiming and Aimbot.Enabled then
         local target = GetBestTarget()
         if target and target.Character and target.Character:FindFirstChild(Aimbot.AimPart) then
-            local predictedPos = target.Character[Aimbot.AimPart].Position +
-                (target.Character:FindFirstChild("HumanoidRootPart").Velocity * Aimbot.Prediction)
+            local head = target.Character[Aimbot.AimPart]
+            local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
             local aimCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
             Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Aimbot.Sensitivity)
         end
     end
 end)
-
