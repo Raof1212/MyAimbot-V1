@@ -18,15 +18,15 @@ local function RemoveCooldown(tool)
     if not tool then return end
 
     if tool:FindFirstChild("FireRate") and typeof(tool.FireRate.Value) == "number" then
-        tool.FireRate.Value = 10
+        tool.FireRate.Value = 0
     end
 
     if tool:FindFirstChild("ReloadTime") and typeof(tool.ReloadTime.Value) == "number" then
-        tool.ReloadTime.Value = 10
+        tool.ReloadTime.Value = 0
     end
 
     if tool:FindFirstChild("Cooldown") and typeof(tool.Cooldown.Value) == "number" then
-        tool.Cooldown.Value = 10
+        tool.Cooldown.Value = 0
     end
 
     if tool:FindFirstChild("Auto") and typeof(tool.Auto.Value) == "boolean" then
@@ -40,4 +40,5 @@ while true do
     RemoveCooldown(tool)
     wait(0.1) -- Adjust frequency if needed
 end
+
 
