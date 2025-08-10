@@ -1,84 +1,52 @@
--- Exunys Aimbot V3 (Modified: Tab toggle, right-click aim, smooth head-lock)
+-- Find the equipped gun/tool (this part depends on your game, adjust path)
+local function GetCurrentGun()
+    local character = LocalPlayer.Character
+    if not character then return nil end
 
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local Players = game:GetService("Players")
-
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
-
--- Aimbot Settings
-local Aimbot = {
-    Enabled = true, -- Master toggle, changed via Tab
-    AimPart = "Head", -- Always target head
-    TeamCheck = false,
-    Sensitivity = 1.00, -- Lower = smoother (0.03–0.06 recommended)
-    Prediction = 0.0, -- Adjust for projectile travel time
-    MaxRange = 150
-}
-
-local aiming = false -- Active while right-click held
-local tabToggle = true -- Master ON by default
-
--- Toggle system with Tab
-UserInputService.InputBegan:Connect(function(input, gp)
-    if not gp then
-        if input.KeyCode == Enum.KeyCode.Tab then
-            tabToggle = not tabToggle
-            print("Aimbot " .. (tabToggle and "Enabled" or "Disabled"))
-        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
-            aiming = true
+    -- Usually gun/tool is a child of the character and is a Tool instance
+    for _, tool in ipairs(character:GetChildren()) do
+        if tool:IsA("Tool") then
+            -- Here you might check tool name or properties to confirm it's a gun
+            return tool
         end
     end
-end)
-
-UserInputService.InputEnded:Connect(function(input, gp)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        aiming = false
-    end
-end)
-
--- Find closest player to you AND screen center
-local function GetBestTarget()
-    local bestTarget = nil
-    local closestScore = math.huge
-    local myChar = LocalPlayer.Character
-    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
-    local myPos = myChar.HumanoidRootPart.Position
-
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild(Aimbot.AimPart) and plr.Character:FindFirstChild("Humanoid") then
-            if Aimbot.TeamCheck and plr.Team == LocalPlayer.Team then
-                continue
-            end
-            if plr.Character.Humanoid.Health <= 0 then
-                continue
-            end
-
-            local head = plr.Character[Aimbot.AimPart]
-            local dist3D = (head.Position - myPos).Magnitude
-            if dist3D <= Aimbot.MaxRange then
-                local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
-                local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
-                if onScreen then
-                    -- Combined score: distance to player + screen center offset
-                    local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                    local score = dist3D + (screenDist / 50) -- weight center more
-                    if score < closestScore then
-                        closestScore = score
-                        bestTarget = plr
-                    end
-                end
-            end
-        end
-    end
-    return bestTarget
+    return nil
 end
 
--- Main loop
+-- Hook into gun firing to remove cooldown and auto-fire
+local gun = nil
+local oldShoot = nil
+
+local function HookGun()
+    gun = GetCurrentGun()
+    if not gun then return end
+
+    -- Assume gun has a 'Shoot' function, adjust if different
+    if gun:FindFirstChild("Shoot") and typeof(gun.Shoot) == "function" then
+        if not oldShoot then
+            oldShoot = gun.Shoot
+            gun.Shoot = function(...)
+                return oldShoot(...)
+            end
+        end
+    end
+
+    -- Remove cooldowns if available (adjust property names)
+    if gun:FindFirstChild("FireRate") then
+        gun.FireRate.Value = 0
+    end
+    if gun:FindFirstChild("ReloadTime") then
+        gun.ReloadTime.Value = 0
+    end
+    if gun:FindFirstChild("Auto") then
+        gun.Auto.Value = true
+    end
+end
+
+-- Auto fire when aiming
 RunService.RenderStepped:Connect(function()
     if tabToggle and aiming and Aimbot.Enabled then
+        -- Aim part (your existing code)
         local target = GetBestTarget()
         if target and target.Character and target.Character:FindFirstChild(Aimbot.AimPart) then
             local head = target.Character[Aimbot.AimPart]
@@ -86,6 +54,17 @@ RunService.RenderStepped:Connect(function()
             local aimCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
             Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Aimbot.Sensitivity)
         end
+
+        -- Hook gun every frame to handle tool switching
+        HookGun()
+
+        -- Try to shoot if gun and Shoot method available
+        if gun and gun.Shoot then
+            gun:Shoot() -- Fire every frame while aiming, no cooldown
+        end
+    else
+        gun = nil
+        oldShoot = nil
     end
 end)
 
