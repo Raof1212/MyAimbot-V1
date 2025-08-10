@@ -13,8 +13,8 @@ local Aimbot = {
     Enabled = true, -- Master toggle, changed via Tab
     AimPart = "Head", -- "Head", "UpperTorso", etc.
     TeamCheck = false,
-    Sensitivity = 0.08, -- Smoothing
-    Prediction = 0.165, -- Adjust for projectile travel time
+    Sensitivity = 0, -- Smoothing
+    Prediction = 0.05, -- Adjust for projectile travel time
     MaxRange = 150 -- Max studs
 }
 
@@ -86,3 +86,4 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
+
