@@ -1,4 +1,4 @@
--- Exunys Aimbot V3 (Modified: Right-click activation, closest target priority, no FOV circle)
+-- Exunys Aimbot V3 (Modified: Tab toggle, right-click aim, closest target priority, no FOV circle)
 
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -10,29 +10,36 @@ local Camera = Workspace.CurrentCamera
 
 -- Aimbot Settings
 local Aimbot = {
-    Enabled = true,
+    Enabled = true, -- Master toggle, changed via Tab
     AimPart = "Head", -- "Head", "UpperTorso", etc.
     TeamCheck = false,
-    Sensitivity = 0.08, -- Smoothing (lower is faster)
+    Sensitivity = 0.08, -- Smoothing
     Prediction = 0.165, -- Adjust for projectile travel time
-    MaxRange = 150 -- Max 3D studs
+    MaxRange = 150 -- Max studs
 }
 
-local aiming = false
+local aiming = false -- Active while right-click held
+local tabToggle = true -- Master ON by default
 
--- Right-click activation
+-- Tab key: toggle aimbot system on/off
 UserInputService.InputBegan:Connect(function(input, gp)
-    if not gp and input.UserInputType == Enum.UserInputType.MouseButton2 then
-        aiming = true
+    if not gp then
+        if input.KeyCode == Enum.KeyCode.Tab then
+            tabToggle = not tabToggle
+            print("Aimbot " .. (tabToggle and "Enabled" or "Disabled"))
+        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+            aiming = true
+        end
     end
 end)
+
 UserInputService.InputEnded:Connect(function(input, gp)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         aiming = false
     end
 end)
 
--- Get best target: closest to you AND closest to screen center
+-- Get best target
 local function GetBestTarget()
     local bestTarget = nil
     local closestScreenDist = math.huge
@@ -69,13 +76,12 @@ end
 
 -- Main aim loop
 RunService.RenderStepped:Connect(function()
-    if aiming and Aimbot.Enabled then
+    if tabToggle and aiming and Aimbot.Enabled then
         local target = GetBestTarget()
         if target and target.Character and target.Character:FindFirstChild(Aimbot.AimPart) then
             local predictedPos = target.Character[Aimbot.AimPart].Position +
                 (target.Character:FindFirstChild("HumanoidRootPart").Velocity * Aimbot.Prediction)
             local aimCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
-            -- Smoothly interpolate
             Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Aimbot.Sensitivity)
         end
     end
