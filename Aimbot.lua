@@ -27,7 +27,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
         if input.KeyCode == Enum.KeyCode.Tab then
             tabToggle = not tabToggle
             print("Aimbot " .. (tabToggle and "Enabled" or "Disabled"))
-        elseif input.UserInputType == Enum.UserInputType.MouseButton4 then
+        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
             aiming = true
         end
     end
@@ -88,6 +88,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
+
 
 
 
