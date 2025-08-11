@@ -27,8 +27,8 @@ local Teammates = {
 }
 
 local aiming = false
-local toggle = false -- aimbot off by default
 local shooting = false
+local toggle = false -- aimbot off initially
 
 -- Green dot UI indicator (12x12 px)
 local ScreenGui = Instance.new("ScreenGui")
@@ -135,7 +135,7 @@ end
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
-    if input.KeyCode == Enum.KeyCode.LeftAlt then
+    if input.KeyCode == Enum.KeyCode.Tab then
         toggle = not toggle
         updateDot()
         print("Aimbot " .. (toggle and "Enabled" or "Disabled"))
@@ -167,12 +167,10 @@ RunService.RenderStepped:Connect(function()
             local currentCFrame = Camera.CFrame
             local targetCFrame = CFrame.new(currentCFrame.Position, aimPos)
 
-            -- Instant aim tracking for both aiming and shooting
+            -- Instant snap aim both when aiming and shooting
             Camera.CFrame = targetCFrame
         end
     end
 end)
-
-
 
 
