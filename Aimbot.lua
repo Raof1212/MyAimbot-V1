@@ -9,30 +9,28 @@ local Camera = Workspace.CurrentCamera
 local Aimbot = {
     Enabled = true,
     AimPart = "Head",
-    Sensitivity = 0.15,       -- Smooth tracking speed
-    SnapSensitivity = 0,      -- Instant snap on shoot
     MaxRange = 200,
 }
 
--- Add your teammates' names here (up to 10 slots)
+-- 10-slot teammates list (add exact Roblox usernames)
 local Teammates = {
-    "PlayerName1", -- slot 1
-    "PlayerName2", -- slot 2
-    "PlayerName3", -- slot 3
-    "PlayerName4", -- slot 4
-    "PlayerName5", -- slot 5
-    "PlayerName6", -- slot 6
-    "PlayerName7", -- slot 7
-    "PlayerName8", -- slot 8
-    "PlayerName9", -- slot 9
-    "PlayerName10" -- slot 10
+    "PlayerName1",
+    "PlayerName2",
+    "PlayerName3",
+    "PlayerName4",
+    "PlayerName5",
+    "PlayerName6",
+    "PlayerName7",
+    "PlayerName8",
+    "PlayerName9",
+    "PlayerName10"
 }
 
 local aiming = false
-local toggle = false -- Start disabled
+local toggle = false -- aimbot off by default
 local shooting = false
 
--- UI Dot Indicator (12x12 green dot)
+-- Green dot UI indicator (12x12 px)
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "AimbotIndicator"
 ScreenGui.ResetOnSpawn = false
@@ -41,7 +39,7 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 local Dot = Instance.new("Frame")
 Dot.Name = "AimDot"
 Dot.Size = UDim2.new(0, 12, 0, 12)
-Dot.Position = UDim2.new(1, -20, 0, 10)
+Dot.Position = UDim2.new(1, -20, 0, 10) -- top-right corner
 Dot.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 Dot.BorderSizePixel = 0
 Dot.AnchorPoint = Vector2.new(1, 0)
@@ -169,16 +167,12 @@ RunService.RenderStepped:Connect(function()
             local currentCFrame = Camera.CFrame
             local targetCFrame = CFrame.new(currentCFrame.Position, aimPos)
 
-            if shooting then
-                -- Instant snap to head when shooting
-                Camera.CFrame = targetCFrame
-            else
-                -- Smooth tracking when aiming only
-                Camera.CFrame = currentCFrame:Lerp(targetCFrame, Aimbot.Sensitivity)
-            end
+            -- Instant aim tracking for both aiming and shooting
+            Camera.CFrame = targetCFrame
         end
     end
 end)
+
 
 
 
