@@ -8,11 +8,34 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
+-- List of teammate usernames to ignore (up to 10)
+local TeammatesUsernames = {
+    "Player1",
+    "Player2",
+    "Player3",
+    "Player4",
+    "Player5",
+    "Player6",
+    "Player7",
+    "Player8",
+    "Player9",
+    "Player10",
+}
+
+-- Helper function to check if a player username is in the teammates list
+local function IsTeammate(username)
+    for _, name in ipairs(TeammatesUsernames) do
+        if name == username then
+            return true
+        end
+    end
+    return false
+end
+
 -- Aimbot Settings
 local Aimbot = {
     Enabled = true, -- Master toggle, changed via Tab
     AimPart = "Head", -- Always target head
-    TeamCheck = false,
     Sensitivity = 1.00, -- Lower = smoother (0.03–0.06 recommended)
     Prediction = 0.0, -- Adjust for projectile travel time
     MaxRange = 150
@@ -39,17 +62,18 @@ UserInputService.InputEnded:Connect(function(input, gp)
     end
 end)
 
--- Find closest player to you AND screen center
+-- Find player whose head is closest to screen center (with max range check)
 local function GetBestTarget()
     local bestTarget = nil
-    local closestScore = math.huge
+    local closestScreenDist = math.huge
     local myChar = LocalPlayer.Character
     if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
     local myPos = myChar.HumanoidRootPart.Position
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild(Aimbot.AimPart) and plr.Character:FindFirstChild("Humanoid") then
-            if Aimbot.TeamCheck and plr.Team == LocalPlayer.Team then
+            if IsTeammate(plr.Name) then
                 continue
             end
             if plr.Character.Humanoid.Health <= 0 then
@@ -62,17 +86,16 @@ local function GetBestTarget()
                 local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
                 local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
                 if onScreen then
-                    -- Combined score: distance to player + screen center offset
-                    local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                    local score = dist3D + (screenDist / 50) -- weight center more
-                    if score < closestScore then
-                        closestScore = score
+                    local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+                    if screenDist < closestScreenDist then
+                        closestScreenDist = screenDist
                         bestTarget = plr
                     end
                 end
             end
         end
     end
+
     return bestTarget
 end
 
@@ -88,4 +111,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
+
+
 
