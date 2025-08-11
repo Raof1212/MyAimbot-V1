@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
@@ -7,47 +8,72 @@ local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 local humanoid = character:WaitForChild("Humanoid")
 
 local floating = false
-local floatHeight = humanoidRootPart.Position.Y
+local floatSpeedUp = 5       -- How fast you float upward continuously
+local moveSpeed = 30         -- Horizontal movement speed while floating
 
--- Use BodyPosition to force the character at a fixed height
 local bodyPosition = Instance.new("BodyPosition")
 bodyPosition.MaxForce = Vector3.new(1e6, 1e6, 1e6)
 bodyPosition.P = 1e4
 bodyPosition.D = 1000
-bodyPosition.Position = Vector3.new(humanoidRootPart.Position.X, floatHeight, humanoidRootPart.Position.Z)
+bodyPosition.Position = humanoidRootPart.Position
 bodyPosition.Parent = humanoidRootPart
 bodyPosition.Enabled = false
 
--- Toggle floating with Q key
-local UserInputService = game:GetService("UserInputService")
+local function toggleFloating()
+	floating = not floating
+	bodyPosition.Enabled = floating
+	humanoid.PlatformStand = floating
+	if floating then
+		print("Floating enabled")
+		-- Start floating at current position
+		bodyPosition.Position = humanoidRootPart.Position
+	else
+		print("Floating disabled")
+		humanoid.PlatformStand = false
+		bodyPosition.Enabled = false
+	end
+end
+
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Q then
-		floating = not floating
-		bodyPosition.Enabled = floating
-		if floating then
-			print("Floating enabled")
-			-- Fix float height on toggle
-			floatHeight = humanoidRootPart.Position.Y
-			bodyPosition.Position = Vector3.new(humanoidRootPart.Position.X, floatHeight, humanoidRootPart.Position.Z)
-			humanoid.PlatformStand = true -- disables physics to prevent falling
-		else
-			print("Floating disabled")
-			humanoid.PlatformStand = false
-			bodyPosition.Enabled = false
-		end
+		toggleFloating()
 	end
 end)
 
--- Keep updating BodyPosition X,Z to follow the player movement, but fix Y to floatHeight
 RunService.Heartbeat:Connect(function()
 	if floating then
+		local moveDirection = Vector3.new(0, 0, 0)
+		local camera = workspace.CurrentCamera
+		local forward = camera.CFrame.LookVector
+		local right = camera.CFrame.RightVector
+
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+			moveDirection = moveDirection + Vector3.new(forward.X, 0, forward.Z)
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+			moveDirection = moveDirection - Vector3.new(forward.X, 0, forward.Z)
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+			moveDirection = moveDirection - Vector3.new(right.X, 0, right.Z)
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+			moveDirection = moveDirection + Vector3.new(right.X, 0, right.Z)
+		end
+
+		-- Normalize horizontal movement to avoid faster diagonal speed
+		if moveDirection.Magnitude > 0 then
+			moveDirection = moveDirection.Unit * moveSpeed
+		end
+
+		-- Add constant upward floating velocity
 		local currentPos = humanoidRootPart.Position
-		bodyPosition.Position = Vector3.new(currentPos.X, floatHeight, currentPos.Z)
+		local targetPos = currentPos + Vector3.new(moveDirection.X, floatSpeedUp * RunService.Heartbeat:Wait(), moveDirection.Z)
+
+		bodyPosition.Position = targetPos
 	end
 end)
 
--- Reset on character respawn
 player.CharacterAdded:Connect(function(char)
 	character = char
 	humanoidRootPart = character:WaitForChild("HumanoidRootPart")
@@ -57,4 +83,5 @@ player.CharacterAdded:Connect(function(char)
 	floating = false
 	humanoid.PlatformStand = false
 end)
+
 
