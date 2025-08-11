@@ -2,7 +2,6 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local StarterGui = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -13,7 +12,7 @@ local Aimbot = {
     AimPart = "Head",
     TeamCheck = false,
     Sensitivity = 0.2,       -- Normal tracking speed (smooth & slow)
-    SnapSensitivity = 0.8,   -- Fast snap speed when shooting
+    SnapSensitivity = 0.8,   -- Fast snap speed when shooting (not used now)
     MaxRange = 200
 }
 
@@ -25,18 +24,17 @@ local shooting = false
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "AimbotIndicator"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global -- Ensure it's above all UI
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 
 local Circle = Instance.new("Frame")
 Circle.Name = "AimCircle"
-Circle.Size = UDim2.new(0, 60, 0, 60) -- 60x60 pixels
-Circle.Position = UDim2.new(1, -70, 0, 10) -- Top-right corner with 10px margin
-Circle.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green
-Circle.BackgroundTransparency = 0.7
+Circle.Size = UDim2.new(0, 20, 0, 20) -- smaller 20x20 px
+Circle.Position = UDim2.new(1, -30, 0, 10) -- top-right corner, 10px margin, smaller offset
+Circle.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- green initially
+Circle.BackgroundTransparency = 0.3
 Circle.BorderSizePixel = 0
-Circle.AnchorPoint = Vector2.new(1, 0) -- Right aligned
+Circle.AnchorPoint = Vector2.new(1, 0)
 
--- Make it a circle shape
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(1, 0)
 UICorner.Parent = Circle
@@ -44,20 +42,18 @@ UICorner.Parent = Circle
 Circle.Parent = ScreenGui
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- Function to update circle color based on aimbot state
 local function updateCircle()
     if toggle and Aimbot.Enabled then
-        Circle.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green when enabled
+        Circle.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- green
         Circle.BackgroundTransparency = 0.3
     else
-        Circle.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red when disabled
-        Circle.BackgroundTransparency = 0.7
+        Circle.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- red
+        Circle.BackgroundTransparency = 0.6
     end
 end
 
 updateCircle()
 
--- Line of sight raycast check
 local function hasLineOfSight(origin, targetPos, ignoreList)
     ignoreList = ignoreList or {}
     local raycastParams = RaycastParams.new()
@@ -156,9 +152,13 @@ RunService.RenderStepped:Connect(function()
             local currentCFrame = Camera.CFrame
             local targetCFrame = CFrame.new(currentCFrame.Position, aimPos)
 
-            local lerpAmount = shooting and Aimbot.SnapSensitivity or Aimbot.Sensitivity
-
-            Camera.CFrame = currentCFrame:Lerp(targetCFrame, lerpAmount)
+            if shooting then
+                -- Snap instantly to the enemy's head
+                Camera.CFrame = targetCFrame
+            else
+                -- Smoothly lerp while aiming but not shooting
+                Camera.CFrame = currentCFrame:Lerp(targetCFrame, Aimbot.Sensitivity)
+            end
         end
     end
 end)
