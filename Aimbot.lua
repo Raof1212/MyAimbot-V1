@@ -1,7 +1,7 @@
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -9,10 +9,16 @@ local Camera = Workspace.CurrentCamera
 local Aimbot = {
     Enabled = true,
     AimPart = "Head",
-    MaxRange = 200,
+    TeamCheck = true, -- enable team check by default
+    Sensitivity = 1.00,
+    Prediction = 0.0,
+    MaxRange = 150,
 }
 
--- 10-slot teammates list (add exact Roblox usernames)
+local aiming = false
+local tabToggle = true -- aimbot ON by default
+
+-- Teammates 10 slots list, fill with teammates’ Roblox usernames or leave empty ("")
 local Teammates = {
     "PlayerName1",
     "PlayerName2",
@@ -26,49 +32,23 @@ local Teammates = {
     "PlayerName10"
 }
 
-local aiming = false
-local shooting = false
-local toggle = false -- aimbot off initially
+-- Store markers for enemies behind walls
+local markers = {}
 
--- Green dot UI indicator (12x12 px)
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AimbotIndicator"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-
-local Dot = Instance.new("Frame")
-Dot.Name = "AimDot"
-Dot.Size = UDim2.new(0, 12, 0, 12)
-Dot.Position = UDim2.new(1, -20, 0, 10) -- top-right corner
-Dot.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-Dot.BorderSizePixel = 0
-Dot.AnchorPoint = Vector2.new(1, 0)
-Dot.Visible = false
-
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(1, 0)
-UICorner.Parent = Dot
-
-Dot.Parent = ScreenGui
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-
-local function updateDot()
-    Dot.Visible = toggle and Aimbot.Enabled
-end
-
+-- Function to check if player is a teammate by name
 local function isTeammate(player)
     for _, name in ipairs(Teammates) do
-        if player.Name == name then
+        if name ~= "" and player.Name == name then
             return true
         end
     end
     return false
 end
 
-local function hasLineOfSight(origin, targetPos, ignoreList)
-    ignoreList = ignoreList or {}
+-- Check line of sight between two points (ignore character parts)
+local function hasLineOfSight(origin, targetPos)
     local raycastParams = RaycastParams.new()
-    raycastParams.FilterDescendantsInstances = ignoreList
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
     raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
     raycastParams.IgnoreWater = true
 
@@ -76,7 +56,7 @@ local function hasLineOfSight(origin, targetPos, ignoreList)
     local raycastResult = Workspace:Raycast(origin, direction, raycastParams)
 
     if not raycastResult then
-        return true
+        return true -- nothing blocking line
     end
 
     local hitPart = raycastResult.Instance
@@ -84,25 +64,73 @@ local function hasLineOfSight(origin, targetPos, ignoreList)
         return true
     end
 
-    if hitPart then
-        local distanceToTarget = (targetPos - origin).Magnitude
-        local distanceToHit = (raycastResult.Position - origin).Magnitude
-        if distanceToHit + 0.1 >= distanceToTarget then
-            return true
-        end
+    -- Check if hit position is very close to target (tolerance 0.1)
+    local distToTarget = (targetPos - origin).Magnitude
+    local distToHit = (raycastResult.Position - origin).Magnitude
+    if distToHit + 0.1 >= distToTarget then
+        return true
     end
 
     return false
 end
 
-local function GetClosestVisibleTarget()
+-- Create or update marker (a small red dot) above enemy heads behind walls
+local function updateMarkerForPlayer(player)
+    if not player.Character or not player.Character:FindFirstChild(Aimbot.AimPart) then
+        if markers[player] then
+            markers[player]:Destroy()
+            markers[player] = nil
+        end
+        return
+    end
+
+    local head = player.Character[Aimbot.AimPart]
+    local origin = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
+    if not origin then return end
+
+    local visible = hasLineOfSight(origin, head.Position)
+
+    if visible then
+        -- Enemy is visible, remove marker if exists
+        if markers[player] then
+            markers[player]:Destroy()
+            markers[player] = nil
+        end
+    else
+        -- Enemy behind wall, create or update marker
+        if not markers[player] then
+            local marker = Instance.new("BillboardGui")
+            marker.Name = "WallMarker"
+            marker.Adornee = head
+            marker.Size = UDim2.new(0, 20, 0, 20)
+            marker.StudsOffset = Vector3.new(0, 0.5, 0)
+            marker.AlwaysOnTop = true
+
+            local frame = Instance.new("Frame")
+            frame.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- red dot
+            frame.Size = UDim2.new(1, 0, 1, 0)
+            frame.BorderSizePixel = 0
+            frame.Parent = marker
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(1, 0)
+            corner.Parent = frame
+
+            marker.Parent = player.Character
+            markers[player] = marker
+        end
+    end
+end
+
+-- Get best target who is visible and not teammate, within range
+local function GetBestTarget()
     local bestTarget = nil
-    local shortestScore = math.huge
+    local closestScore = math.huge
     local myChar = LocalPlayer.Character
     if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
     local myPos = myChar.HumanoidRootPart.Position
 
-    for _, plr in pairs(Players:GetPlayers()) do
+    for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild(Aimbot.AimPart) and plr.Character:FindFirstChild("Humanoid") then
             if isTeammate(plr) then
                 continue
@@ -114,14 +142,15 @@ local function GetClosestVisibleTarget()
             local head = plr.Character[Aimbot.AimPart]
             local dist3D = (head.Position - myPos).Magnitude
             if dist3D <= Aimbot.MaxRange then
-                if hasLineOfSight(myChar.HumanoidRootPart.Position, head.Position, {myChar}) then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                if hasLineOfSight(myPos, head.Position) then
+                    local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
                     if onScreen then
                         local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
                         local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-                        local score = dist3D + (screenDist / 50)
-                        if score < shortestScore then
-                            shortestScore = score
+                        local score = dist3D + (screenDist / 50) -- weight center more
+                        if score < closestScore then
+                            closestScore = score
                             bestTarget = plr
                         end
                     end
@@ -133,42 +162,45 @@ local function GetClosestVisibleTarget()
     return bestTarget
 end
 
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    if input.KeyCode == Enum.KeyCode.Tab then
-        toggle = not toggle
-        updateDot()
-        print("Aimbot " .. (toggle and "Enabled" or "Disabled"))
-    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
-        aiming = true
-        updateDot()
-    elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
-        shooting = true
-        updateDot()
+-- Handle input toggling and aiming state
+UserInputService.InputBegan:Connect(function(input, gp)
+    if not gp then
+        if input.KeyCode == Enum.KeyCode.Tab then
+            tabToggle = not tabToggle
+            print("Aimbot " .. (tabToggle and "Enabled" or "Disabled"))
+        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+            aiming = true
+        end
     end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
+UserInputService.InputEnded:Connect(function(input, gp)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         aiming = false
-        updateDot()
-    elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
-        shooting = false
-        updateDot()
     end
 end)
 
+-- Main loop, update markers and aim if toggled
 RunService.RenderStepped:Connect(function()
-    if toggle and Aimbot.Enabled and (aiming or shooting) then
-        local target = GetClosestVisibleTarget()
+    -- Update markers for all players except teammates and local player
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild(Aimbot.AimPart) then
+            if not isTeammate(plr) and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
+                updateMarkerForPlayer(plr)
+            elseif markers[plr] then
+                markers[plr]:Destroy()
+                markers[plr] = nil
+            end
+        end
+    end
+
+    if tabToggle and aiming and Aimbot.Enabled then
+        local target = GetBestTarget()
         if target and target.Character and target.Character:FindFirstChild(Aimbot.AimPart) then
             local head = target.Character[Aimbot.AimPart]
-            local aimPos = head.Position
-            local currentCFrame = Camera.CFrame
-            local targetCFrame = CFrame.new(currentCFrame.Position, aimPos)
-
-            -- Instant snap aim both when aiming and shooting
-            Camera.CFrame = targetCFrame
+            local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
+            local aimCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
+            Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Aimbot.Sensitivity)
         end
     end
 end)
