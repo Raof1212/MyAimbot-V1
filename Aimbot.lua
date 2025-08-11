@@ -10,7 +10,7 @@ local Camera = Workspace.CurrentCamera
 
 -- List of teammate usernames to ignore (up to 10)
 local TeammatesUsernames = {
-    "marat07_228",
+    "hamza_x007j",
     "Player2",
     "Player3",
     "Player4",
@@ -126,6 +126,7 @@ RunService.RenderStepped:Connect(function()
         currentTarget = nil
     end
 end)
+
 
 
 
