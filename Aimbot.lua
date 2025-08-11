@@ -10,7 +10,7 @@ local Aimbot = {
     Enabled = true,
     AimPart = "Head",
     Sensitivity = 0.15,       -- Smooth tracking speed
-    SnapSensitivity = 1,      -- Instant snap on shoot
+    SnapSensitivity = 0,      -- Instant snap on shoot
     MaxRange = 200,
 }
 
@@ -179,5 +179,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
+
 
 
