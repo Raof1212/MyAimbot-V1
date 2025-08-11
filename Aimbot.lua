@@ -5,22 +5,34 @@ local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
-local mouse = LocalPlayer:GetMouse()
 
 local Aimbot = {
     Enabled = true,
     AimPart = "Head",
-    TeamCheck = false,
     Sensitivity = 0.15,       -- Smooth tracking speed
     SnapSensitivity = 1,      -- Instant snap on shoot
-    MaxRange = 200
+    MaxRange = 200,
+}
+
+-- Add your teammates' names here (up to 10 slots)
+local Teammates = {
+    "PlayerName1", -- slot 1
+    "PlayerName2", -- slot 2
+    "PlayerName3", -- slot 3
+    "PlayerName4", -- slot 4
+    "PlayerName5", -- slot 5
+    "PlayerName6", -- slot 6
+    "PlayerName7", -- slot 7
+    "PlayerName8", -- slot 8
+    "PlayerName9", -- slot 9
+    "PlayerName10" -- slot 10
 }
 
 local aiming = false
-local toggle = false -- Start OFF to show dot only when enabled
+local toggle = false -- Start disabled
 local shooting = false
 
--- Create the aiming dot UI (small green dot 12x12)
+-- UI Dot Indicator (12x12 green dot)
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "AimbotIndicator"
 ScreenGui.ResetOnSpawn = false
@@ -29,11 +41,11 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 local Dot = Instance.new("Frame")
 Dot.Name = "AimDot"
 Dot.Size = UDim2.new(0, 12, 0, 12)
-Dot.Position = UDim2.new(1, -20, 0, 10) -- top-right corner with margin
+Dot.Position = UDim2.new(1, -20, 0, 10)
 Dot.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 Dot.BorderSizePixel = 0
 Dot.AnchorPoint = Vector2.new(1, 0)
-Dot.Visible = false -- Hidden initially
+Dot.Visible = false
 
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(1, 0)
@@ -43,8 +55,16 @@ Dot.Parent = ScreenGui
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local function updateDot()
-    -- Dot visible only when aimbot toggled ON and aiming or shooting
-    Dot.Visible = toggle and Aimbot.Enabled and (aiming or shooting)
+    Dot.Visible = toggle and Aimbot.Enabled
+end
+
+local function isTeammate(player)
+    for _, name in ipairs(Teammates) do
+        if player.Name == name then
+            return true
+        end
+    end
+    return false
 end
 
 local function hasLineOfSight(origin, targetPos, ignoreList)
@@ -86,7 +106,7 @@ local function GetClosestVisibleTarget()
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild(Aimbot.AimPart) and plr.Character:FindFirstChild("Humanoid") then
-            if Aimbot.TeamCheck and plr.Team == LocalPlayer.Team then
+            if isTeammate(plr) then
                 continue
             end
             if plr.Character.Humanoid.Health <= 0 then
@@ -117,7 +137,7 @@ end
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
-    if input.KeyCode == Enum.KeyCode.LeftAlt then  -- Toggle with Left Alt
+    if input.KeyCode == Enum.KeyCode.LeftAlt then
         toggle = not toggle
         updateDot()
         print("Aimbot " .. (toggle and "Enabled" or "Disabled"))
@@ -159,4 +179,5 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
+
 
