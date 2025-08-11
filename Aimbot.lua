@@ -72,7 +72,7 @@ getgenv().ExunysDeveloperAimbot = {
 	Settings = {
 		Enabled = true,
 
-		Speed = 30, -- <-- NEW: character speed control (default Roblox walk speed)
+		Speed = 100, -- <-- NEW: character speed control (default Roblox walk speed)
 
 		TeamCheck = false,
 		AliveCheck = true,
@@ -395,5 +395,6 @@ Environment.Load = Load
 setmetatable(Environment, {__call = Load})
 
 return Environment
+
 
 
