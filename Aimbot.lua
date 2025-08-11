@@ -21,30 +21,6 @@ local Aimbot = {
 local aiming = false -- Active while right-click held
 local tabToggle = true -- Master ON by default
 
--- 10 slots for teammates usernames (empty = unused)
-local Teammates = {
-    "Player1",
-    "Player2",
-    "Player3",
-    "Player4",
-    "Player5",
-    "Player6",
-    "Player7",
-    "Player8",
-    "Player9",
-    "Player10"
-}
-
--- Check if a player is a teammate by username
-local function isTeammate(player)
-    for _, name in ipairs(Teammates) do
-        if name ~= "" and player.Name == name then
-            return true
-        end
-    end
-    return false
-end
-
 -- Toggle system with Tab
 UserInputService.InputBegan:Connect(function(input, gp)
     if not gp then
@@ -73,11 +49,9 @@ local function GetBestTarget()
 
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild(Aimbot.AimPart) and plr.Character:FindFirstChild("Humanoid") then
-            -- Ignore teammates
-            if isTeammate(plr) then
+            if Aimbot.TeamCheck and plr.Team == LocalPlayer.Team then
                 continue
             end
-
             if plr.Character.Humanoid.Health <= 0 then
                 continue
             end
@@ -114,3 +88,4 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
+
