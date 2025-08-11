@@ -10,7 +10,7 @@ local Aimbot = {
     Enabled = true,
     AimPart = "Head",
     TeamCheck = true, -- enable team check by default
-    Sensitivity = 00,
+    Sensitivity = 11111,
     Prediction = 0.0,
     MaxRange = 150,
 }
@@ -204,6 +204,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
+
 
 
 
