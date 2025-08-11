@@ -1,4 +1,4 @@
--- Exunys Aimbot V3 (Modified: Tab toggle, right-click aim, smooth head-lock)
+-- Exunys Aimbot V3 (Modified: Tab toggle, right-click aim, target lock, crosshair tracking)
 
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -22,7 +22,6 @@ local TeammatesUsernames = {
     "Player10",
 }
 
--- Helper function to check if a player username is in the teammates list
 local function IsTeammate(username)
     for _, name in ipairs(TeammatesUsernames) do
         if name == username then
@@ -34,15 +33,17 @@ end
 
 -- Aimbot Settings
 local Aimbot = {
-    Enabled = true, -- Master toggle, changed via Tab
-    AimPart = "Head", -- Always target head
-    Sensitivity = 1.00, -- Lower = smoother (0.03–0.06 recommended)
-    Prediction = 0.0, -- Adjust for projectile travel time
-    MaxRange = 150
+    Enabled = true,
+    AimPart = "Head",
+    Sensitivity = 1.0, -- 1 is instant, lower is smoother
+    Prediction = 0.0,
+    MaxRange = 150,
 }
 
-local aiming = false -- Active while right-click held
-local tabToggle = true -- Master ON by default
+local aiming = false
+local tabToggle = true
+
+local currentTarget = nil
 
 -- Toggle system with Tab
 UserInputService.InputBegan:Connect(function(input, gp)
@@ -50,6 +51,9 @@ UserInputService.InputBegan:Connect(function(input, gp)
         if input.KeyCode == Enum.KeyCode.Tab then
             tabToggle = not tabToggle
             print("Aimbot " .. (tabToggle and "Enabled" or "Disabled"))
+            if not tabToggle then
+                currentTarget = nil -- clear target when aimbot off
+            end
         elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
             aiming = true
         end
@@ -59,36 +63,42 @@ end)
 UserInputService.InputEnded:Connect(function(input, gp)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         aiming = false
+        currentTarget = nil -- stop targeting when right click released
     end
 end)
 
--- Find player whose head is closest to screen center (with max range check)
-local function GetBestTarget()
+local function IsValidTarget(plr)
+    if not plr or not plr.Character or not plr.Character:FindFirstChild(Aimbot.AimPart) or not plr.Character:FindFirstChild("Humanoid") then
+        return false
+    end
+    if plr.Character.Humanoid.Health <= 0 then
+        return false
+    end
+    if IsTeammate(plr.Name) then
+        return false
+    end
+    return true
+end
+
+local function GetClosestToCrosshair()
     local bestTarget = nil
-    local closestScreenDist = math.huge
+    local closestDist = math.huge
+    local mousePos = UserInputService:GetMouseLocation()
     local myChar = LocalPlayer.Character
     if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
     local myPos = myChar.HumanoidRootPart.Position
-    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild(Aimbot.AimPart) and plr.Character:FindFirstChild("Humanoid") then
-            if IsTeammate(plr.Name) then
-                continue
-            end
-            if plr.Character.Humanoid.Health <= 0 then
-                continue
-            end
-
+        if plr ~= LocalPlayer and IsValidTarget(plr) then
             local head = plr.Character[Aimbot.AimPart]
             local dist3D = (head.Position - myPos).Magnitude
             if dist3D <= Aimbot.MaxRange then
                 local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
                 local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
                 if onScreen then
-                    local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-                    if screenDist < closestScreenDist then
-                        closestScreenDist = screenDist
+                    local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
+                    if screenDist < closestDist then
+                        closestDist = screenDist
                         bestTarget = plr
                     end
                 end
@@ -99,18 +109,24 @@ local function GetBestTarget()
     return bestTarget
 end
 
--- Main loop
 RunService.RenderStepped:Connect(function()
     if tabToggle and aiming and Aimbot.Enabled then
-        local target = GetBestTarget()
-        if target and target.Character and target.Character:FindFirstChild(Aimbot.AimPart) then
-            local head = target.Character[Aimbot.AimPart]
+        -- If no target or target invalid, find new
+        if not IsValidTarget(currentTarget) then
+            currentTarget = GetClosestToCrosshair()
+        end
+
+        if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild(Aimbot.AimPart) then
+            local head = currentTarget.Character[Aimbot.AimPart]
             local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
             local aimCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
             Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Aimbot.Sensitivity)
         end
+    else
+        currentTarget = nil
     end
 end)
+
 
 
 
