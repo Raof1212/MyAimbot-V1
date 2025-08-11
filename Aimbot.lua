@@ -11,48 +11,41 @@ local Aimbot = {
     Enabled = true,
     AimPart = "Head",
     TeamCheck = false,
-    Sensitivity = 0.2,       -- Normal tracking speed (smooth & slow)
-    SnapSensitivity = 0.8,   -- Fast snap speed when shooting (not used now)
+    Sensitivity = 0.15,       -- Smooth tracking speed
+    SnapSensitivity = 1,      -- Instant snap on shoot
     MaxRange = 200
 }
 
 local aiming = false
-local toggle = true
+local toggle = false -- Start OFF to show dot only when enabled
 local shooting = false
 
--- Create the aiming circle UI
+-- Create the aiming dot UI (small green dot 12x12)
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "AimbotIndicator"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 
-local Circle = Instance.new("Frame")
-Circle.Name = "AimCircle"
-Circle.Size = UDim2.new(0, 20, 0, 20) -- smaller 20x20 px
-Circle.Position = UDim2.new(1, -30, 0, 10) -- top-right corner, 10px margin, smaller offset
-Circle.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- green initially
-Circle.BackgroundTransparency = 0.3
-Circle.BorderSizePixel = 0
-Circle.AnchorPoint = Vector2.new(1, 0)
+local Dot = Instance.new("Frame")
+Dot.Name = "AimDot"
+Dot.Size = UDim2.new(0, 12, 0, 12)
+Dot.Position = UDim2.new(1, -20, 0, 10) -- top-right corner with margin
+Dot.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+Dot.BorderSizePixel = 0
+Dot.AnchorPoint = Vector2.new(1, 0)
+Dot.Visible = false -- Hidden initially
 
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(1, 0)
-UICorner.Parent = Circle
+UICorner.Parent = Dot
 
-Circle.Parent = ScreenGui
+Dot.Parent = ScreenGui
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-local function updateCircle()
-    if toggle and Aimbot.Enabled then
-        Circle.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- green
-        Circle.BackgroundTransparency = 0.3
-    else
-        Circle.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- red
-        Circle.BackgroundTransparency = 0.6
-    end
+local function updateDot()
+    -- Dot visible only when aimbot toggled ON and aiming or shooting
+    Dot.Visible = toggle and Aimbot.Enabled and (aiming or shooting)
 end
-
-updateCircle()
 
 local function hasLineOfSight(origin, targetPos, ignoreList)
     ignoreList = ignoreList or {}
@@ -124,27 +117,31 @@ end
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
-    if input.KeyCode == Enum.KeyCode.Tab then
+    if input.KeyCode == Enum.KeyCode.LeftAlt then  -- Toggle with Left Alt
         toggle = not toggle
-        updateCircle()
+        updateDot()
         print("Aimbot " .. (toggle and "Enabled" or "Disabled"))
     elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
         aiming = true
+        updateDot()
     elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
         shooting = true
+        updateDot()
     end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         aiming = false
+        updateDot()
     elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
         shooting = false
+        updateDot()
     end
 end)
 
 RunService.RenderStepped:Connect(function()
-    if toggle and aiming and Aimbot.Enabled then
+    if toggle and Aimbot.Enabled and (aiming or shooting) then
         local target = GetClosestVisibleTarget()
         if target and target.Character and target.Character:FindFirstChild(Aimbot.AimPart) then
             local head = target.Character[Aimbot.AimPart]
@@ -153,10 +150,10 @@ RunService.RenderStepped:Connect(function()
             local targetCFrame = CFrame.new(currentCFrame.Position, aimPos)
 
             if shooting then
-                -- Snap instantly to the enemy's head
+                -- Instant snap to head when shooting
                 Camera.CFrame = targetCFrame
             else
-                -- Smoothly lerp while aiming but not shooting
+                -- Smooth tracking when aiming only
                 Camera.CFrame = currentCFrame:Lerp(targetCFrame, Aimbot.Sensitivity)
             end
         end
