@@ -1,40 +1,99 @@
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+
 local LocalPlayer = Players.LocalPlayer
-local StarterGui = game:GetService("StarterGui")
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- Set your speed value here
-local SPEED = 100
+-- Flying control variables
+local flying = false
+local flySpeed = 50
+local velocity = Vector3.new(0,0,0)
 
--- Create the green dot
-local function createGreenDot()
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "SpeedIndicatorGui"
-    ScreenGui.ResetOnSpawn = false
-    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+local lastSpaceTapTime = 0
+local doubleTapThreshold = 0.3 -- seconds between taps to count as double tap
 
-    local Dot = Instance.new("Frame")
-    Dot.Name = "GreenDot"
-    Dot.Size = UDim2.new(0, 10, 0, 10) -- 10x10 pixels
-    Dot.Position = UDim2.new(1, -20, 0, 10) -- Top-right corner with 20 pixels from right, 10 pixels from top
-    Dot.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Bright green
-    Dot.BorderSizePixel = 0
-    Dot.AnchorPoint = Vector2.new(1, 0) -- Anchor to top-right
-    Dot.Parent = ScreenGui
+-- To move character smoothly while flying
+local bodyVelocity = Instance.new("BodyVelocity")
+bodyVelocity.MaxForce = Vector3.new(1e5,1e5,1e5)
+bodyVelocity.Velocity = Vector3.new(0,0,0)
+bodyVelocity.P = 1250
+bodyVelocity.Parent = rootPart
+bodyVelocity.Enabled = false
+
+local function onInputBegan(input, gameProcessed)
+	if gameProcessed then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		if input.KeyCode == Enum.KeyCode.Space then
+			local currentTime = tick()
+			if currentTime - lastSpaceTapTime <= doubleTapThreshold then
+				-- Double tapped space - toggle flying
+				flying = not flying
+				bodyVelocity.Enabled = flying
+				if flying then
+					print("Fly mode activated")
+				else
+					print("Fly mode deactivated")
+					bodyVelocity.Velocity = Vector3.new(0,0,0)
+				end
+			end
+			lastSpaceTapTime = currentTime
+		end
+	end
 end
 
--- Set high speed function
-local function setHighSpeed(speed)
-    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local humanoid = character:WaitForChild("Humanoid")
-    humanoid.WalkSpeed = speed
-end
+-- Update flying velocity every frame while flying
+RunService.Heartbeat:Connect(function()
+	if flying then
+		local moveDirection = Vector3.new(0,0,0)
+		local camera = workspace.CurrentCamera
+		local forward = camera.CFrame.LookVector
+		local right = camera.CFrame.RightVector
 
--- Apply speed and create the green dot
-setHighSpeed(SPEED)
-createGreenDot()
+		-- WASD controls for flying direction
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+			moveDirection = moveDirection + forward
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+			moveDirection = moveDirection - forward
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+			moveDirection = moveDirection - right
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+			moveDirection = moveDirection + right
+		end
 
--- Reapply speed on respawn
+		moveDirection = moveDirection.Unit
+		if moveDirection ~= moveDirection then -- check for NaN (when no keys pressed)
+			moveDirection = Vector3.new(0,0,0)
+		end
+
+		-- Up and down control: Space to go up, LeftShift to go down
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+			moveDirection = moveDirection + Vector3.new(0,1,0)
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+			moveDirection = moveDirection + Vector3.new(0,-1,0)
+		end
+
+		bodyVelocity.Velocity = moveDirection * flySpeed
+	else
+		-- Not flying, disable velocity
+		bodyVelocity.Velocity = Vector3.new(0,0,0)
+	end
+end)
+
+UserInputService.InputBegan:Connect(onInputBegan)
+
+-- Reset flying on character respawn
 LocalPlayer.CharacterAdded:Connect(function(char)
-    char:WaitForChild("Humanoid")
-    setHighSpeed(SPEED)
+	character = char
+	humanoid = character:WaitForChild("Humanoid")
+	rootPart = character:WaitForChild("HumanoidRootPart")
+	bodyVelocity.Parent = rootPart
+	bodyVelocity.Enabled = false
+	flying = false
 end)
