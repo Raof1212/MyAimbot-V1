@@ -1,91 +1,60 @@
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
-local LocalPlayer = Players.LocalPlayer
-local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 local humanoid = character:WaitForChild("Humanoid")
-local rootPart = character:WaitForChild("HumanoidRootPart")
 
-local flying = false
-local flySpeed = 50
+local floating = false
+local floatHeight = humanoidRootPart.Position.Y
 
+-- Use BodyPosition to force the character at a fixed height
 local bodyPosition = Instance.new("BodyPosition")
-bodyPosition.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-bodyPosition.P = 10000
+bodyPosition.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+bodyPosition.P = 1e4
 bodyPosition.D = 1000
-bodyPosition.Parent = rootPart
-bodyPosition.Position = rootPart.Position
+bodyPosition.Position = Vector3.new(humanoidRootPart.Position.X, floatHeight, humanoidRootPart.Position.Z)
+bodyPosition.Parent = humanoidRootPart
 bodyPosition.Enabled = false
 
-local function toggleFly()
-	flying = not flying
-	bodyPosition.Enabled = flying
-	humanoid.PlatformStand = flying
-
-	if flying then
-		print("Fly mode activated")
-	else
-		print("Fly mode deactivated")
-	end
-end
-
-local function onInputBegan(input, gameProcessed)
+-- Toggle floating with Q key
+local UserInputService = game:GetService("UserInputService")
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
-	if input.UserInputType == Enum.UserInputType.Keyboard then
-		if input.KeyCode == Enum.KeyCode.Q then
-			toggleFly()
-		end
-	end
-end
-
-RunService.Heartbeat:Connect(function()
-	if flying then
-		local moveDirection = Vector3.new(0,0,0)
-		local camera = workspace.CurrentCamera
-		local forward = camera.CFrame.LookVector
-		local right = camera.CFrame.RightVector
-
-		if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-			moveDirection = moveDirection + forward
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-			moveDirection = moveDirection - forward
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-			moveDirection = moveDirection - right
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-			moveDirection = moveDirection + right
-		end
-
-		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-			moveDirection = moveDirection + Vector3.new(0,1,0)
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-			moveDirection = moveDirection + Vector3.new(0,-1,0)
-		end
-
-		if moveDirection.Magnitude > 0 then
-			moveDirection = moveDirection.Unit
-			bodyPosition.Position = rootPart.Position + moveDirection * flySpeed
+	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Q then
+		floating = not floating
+		bodyPosition.Enabled = floating
+		if floating then
+			print("Floating enabled")
+			-- Fix float height on toggle
+			floatHeight = humanoidRootPart.Position.Y
+			bodyPosition.Position = Vector3.new(humanoidRootPart.Position.X, floatHeight, humanoidRootPart.Position.Z)
+			humanoid.PlatformStand = true -- disables physics to prevent falling
 		else
-			bodyPosition.Position = rootPart.Position
+			print("Floating disabled")
+			humanoid.PlatformStand = false
+			bodyPosition.Enabled = false
 		end
-	else
-		bodyPosition.Position = rootPart.Position
 	end
 end)
 
-UserInputService.InputBegan:Connect(onInputBegan)
+-- Keep updating BodyPosition X,Z to follow the player movement, but fix Y to floatHeight
+RunService.Heartbeat:Connect(function()
+	if floating then
+		local currentPos = humanoidRootPart.Position
+		bodyPosition.Position = Vector3.new(currentPos.X, floatHeight, currentPos.Z)
+	end
+end)
 
-LocalPlayer.CharacterAdded:Connect(function(char)
+-- Reset on character respawn
+player.CharacterAdded:Connect(function(char)
 	character = char
+	humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 	humanoid = character:WaitForChild("Humanoid")
-	rootPart = character:WaitForChild("HumanoidRootPart")
-	bodyPosition.Parent = rootPart
+	bodyPosition.Parent = humanoidRootPart
 	bodyPosition.Enabled = false
+	floating = false
 	humanoid.PlatformStand = false
-	flying = false
 end)
 
