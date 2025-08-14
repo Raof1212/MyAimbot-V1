@@ -34,7 +34,7 @@ local Aimbot = {
     Enabled = true,
     AimPart = "Head",
     Sensitivity = 1.0, -- 1 is instant, lower is smoother
-    Prediction = 0.05,
+    Prediction = 0.0,
     MaxRange = 300,
 }
 
@@ -124,6 +124,7 @@ RunService.RenderStepped:Connect(function()
         currentTarget = nil
     end
 end)
+
 
 
 
