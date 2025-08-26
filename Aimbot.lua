@@ -1,168 +1,122 @@
---// Services
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
-
---// Player refs
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
 
---// Teammates list
-local TeammatesUsernames = {
-    "hamza_x007j",
-    "Roben121200",
-    "ALG_DZ3",
-    "mikey7y77",
-    "haithem123k",
-    "Player6",
-    "Player7",
-    "Player8",
-    "Player9",
-    "Player10",
-}
+-- Settings
+local AimbotEnabled = true
+local AimKey = Enum.UserInputType.MouseButton1 -- Left Click
+local AimPart = "Head"
+local FOV = 150
+local Smoothness = 0.2
+local TeammatesCheck = true
 
-local function IsTeammate(username)
-    for _, name in ipairs(TeammatesUsernames) do
-        if name == username then
-            return true
+-- ESP Drawing Storage
+local ESPObjects = {}
+
+-- Function to draw ESP
+function CreateESP(player)
+    if player == LocalPlayer then return end
+    local esp = {
+        Box = Drawing.new("Square"),
+        Name = Drawing.new("Text"),
+        Health = Drawing.new("Line"),
+    }
+    esp.Box.Thickness = 1
+    esp.Box.Filled = false
+    esp.Box.Color = Color3.fromRGB(255, 0, 0)
+
+    esp.Name.Size = 14
+    esp.Name.Color = Color3.fromRGB(255, 255, 255)
+    esp.Name.Center = true
+
+    esp.Health.Thickness = 2
+    esp.Health.Color = Color3.fromRGB(0, 255, 0)
+
+    ESPObjects[player] = esp
+end
+
+-- Remove ESP when player leaves
+Players.PlayerRemoving:Connect(function(player)
+    if ESPObjects[player] then
+        for _, obj in pairs(ESPObjects[player]) do
+            obj:Remove()
         end
-    end
-    return false
-end
-
---// Aimbot settings (unchanged)
-local Aimbot = {
-    Enabled = true,
-    AimPart = "Head",
-    Sensitivity = 1.0,
-    Prediction = 0.0,
-    MaxRange = 300,
-}
-
-local aiming = false
-local tabToggle = true
-local currentTarget = nil
-
---// Hitbox extender
-local function ExtendHitbox(plr)
-    if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-        local root = plr.Character.HumanoidRootPart
-        root.Size = Vector3.new(10, 10, 10) -- Bigger hitbox
-        root.Transparency = 1
-        root.CanCollide = false
-    end
-end
-
--- Extend existing enemies
-for _, plr in ipairs(Players:GetPlayers()) do
-    if plr ~= LocalPlayer then
-        ExtendHitbox(plr)
-    end
-end
-
--- Extend new enemies
-Players.PlayerAdded:Connect(function(plr)
-    if plr ~= LocalPlayer then
-        plr.CharacterAdded:Connect(function()
-            task.wait(1)
-            ExtendHitbox(plr)
-        end)
+        ESPObjects[player] = nil
     end
 end)
 
---// Toggle (Tab) + aiming (RMB)
-UserInputService.InputBegan:Connect(function(input, gp)
-    if not gp then
-        if input.KeyCode == Enum.KeyCode.Tab then
-            tabToggle = not tabToggle
-            print("Aimbot " .. (tabToggle and "Enabled" or "Disabled"))
-            if not tabToggle then
-                currentTarget = nil
-            end
-        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
-            aiming = true
-        end
-    end
-end)
+-- Update loop
+RunService.RenderStepped:Connect(function()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local Humanoid = player.Character:FindFirstChild("Humanoid")
+            local RootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            local Head = player.Character:FindFirstChild("Head")
 
-UserInputService.InputEnded:Connect(function(input, gp)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        aiming = false
-        currentTarget = nil
-    end
-end)
+            local pos, onScreen = Camera:WorldToViewportPoint(RootPart.Position)
+            if onScreen then
+                local esp = ESPObjects[player] or CreateESP(player)
 
---// Target checks
-local function IsValidTarget(plr)
-    if not plr or not plr.Character or not plr.Character:FindFirstChild(Aimbot.AimPart) or not plr.Character:FindFirstChild("Humanoid") then
-        return false
-    end
-    if plr.Character.Humanoid.Health <= 0 then
-        return false
-    end
-    if IsTeammate(plr.Name) then
-        return false
-    end
-    return true
-end
+                -- Box
+                esp.Box.Size = Vector2.new(1000 / pos.Z, 2000 / pos.Z)
+                esp.Box.Position = Vector2.new(pos.X - esp.Box.Size.X / 2, pos.Y - esp.Box.Size.Y / 2)
+                esp.Box.Visible = true
 
-local function GetClosestToCrosshair()
-    local bestTarget = nil
-    local closestDist = math.huge
-    local mousePos = UserInputService:GetMouseLocation()
-    local myChar = LocalPlayer.Character
-    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
-    local myPos = myChar.HumanoidRootPart.Position
+                -- Name
+                esp.Name.Text = player.Name .. " [" .. math.floor(Humanoid.Health) .. "]"
+                esp.Name.Position = Vector2.new(pos.X, pos.Y - esp.Box.Size.Y / 2 - 15)
+                esp.Name.Visible = true
 
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and IsValidTarget(plr) then
-            local part = plr.Character[Aimbot.AimPart]
-            local dist3D = (part.Position - myPos).Magnitude
-            if dist3D <= Aimbot.MaxRange then
-                local predictedPos = part.Position + (part.Velocity * Aimbot.Prediction)
-                local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
-                if onScreen then
-                    local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
-                    if screenDist < closestDist then
-                        closestDist = screenDist
-                        bestTarget = plr
-                    end
+                -- Health bar
+                esp.Health.From = Vector2.new(pos.X - esp.Box.Size.X / 2 - 5, pos.Y + esp.Box.Size.Y / 2)
+                esp.Health.To = Vector2.new(pos.X - esp.Box.Size.X / 2 - 5, pos.Y + esp.Box.Size.Y / 2 - (Humanoid.Health / Humanoid.MaxHealth) * esp.Box.Size.Y)
+                esp.Health.Visible = true
+            else
+                if ESPObjects[player] then
+                    ESPObjects[player].Box.Visible = false
+                    ESPObjects[player].Name.Visible = false
+                    ESPObjects[player].Health.Visible = false
                 end
             end
         end
     end
-    return bestTarget
-end
-
---// Aimbot loop
-RunService.RenderStepped:Connect(function()
-    if tabToggle and aiming and Aimbot.Enabled then
-        if not IsValidTarget(currentTarget) then
-            currentTarget = GetClosestToCrosshair()
-        end
-
-        if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild(Aimbot.AimPart) then
-            local part = currentTarget.Character[Aimbot.AimPart]
-            local predictedPos = part.Position + (part.Velocity * Aimbot.Prediction)
-            local aimCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
-            Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Aimbot.Sensitivity)
-        end
-    else
-        currentTarget = nil
-    end
 end)
 
---// Silent Aim (force bullets/rays to head)
-local mt = getrawmetatable(game)
-setreadonly(mt, false)
-local oldIndex = mt.__index
-
-mt.__index = newcclosure(function(self, key)
-    if key == "Hit" and currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("Head") then
-        return CFrame.new(Camera.CFrame.Position, currentTarget.Character.Head.Position)
+-- Aimbot
+function GetClosestTarget()
+    local closest, dist = nil, FOV
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(AimPart) then
+            if TeammatesCheck and player.Team == LocalPlayer.Team then continue end
+            local pos, onScreen = Camera:WorldToViewportPoint(player.Character[AimPart].Position)
+            if onScreen then
+                local mousePos = UserInputService:GetMouseLocation()
+                local mag = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                if mag < dist then
+                    dist = mag
+                    closest = player.Character[AimPart]
+                end
+            end
+        end
     end
-    return oldIndex(self, key)
+    return closest
+end
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.UserInputType == AimKey and AimbotEnabled then
+        RunService.RenderStepped:Connect(function()
+            local target = GetClosestTarget()
+            if target then
+                local aimPos = Camera:WorldToViewportPoint(target.Position)
+                local mousePos = UserInputService:GetMouseLocation()
+                local move = (Vector2.new(aimPos.X, aimPos.Y) - mousePos) * Smoothness
+                mousemoverel(move.X, move.Y) -- executor function
+            end
+        end)
+    end
 end)
 
 
