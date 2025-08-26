@@ -4,7 +4,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 
---// Player references
+--// Player refs
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
@@ -31,11 +31,11 @@ local function IsTeammate(username)
     return false
 end
 
---// Aimbot Settings (unchanged)
+--// Aimbot settings (unchanged)
 local Aimbot = {
     Enabled = true,
     AimPart = "Head",
-    Sensitivity = 1.0, -- 1 is instant, lower is smoother
+    Sensitivity = 1.0,
     Prediction = 0.0,
     MaxRange = 300,
 }
@@ -44,24 +44,24 @@ local aiming = false
 local tabToggle = true
 local currentTarget = nil
 
---// Hitbox Extender
+--// Hitbox extender
 local function ExtendHitbox(plr)
     if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
         local root = plr.Character.HumanoidRootPart
-        root.Size = Vector3.new(10, 10, 10) -- bigger hitbox
-        root.Transparency = 1 -- invisible
+        root.Size = Vector3.new(10, 10, 10) -- Bigger hitbox
+        root.Transparency = 1
         root.CanCollide = false
     end
 end
 
--- Apply extender to current enemies
+-- Extend existing enemies
 for _, plr in ipairs(Players:GetPlayers()) do
     if plr ~= LocalPlayer then
         ExtendHitbox(plr)
     end
 end
 
--- Apply extender on new enemies / respawns
+-- Extend new enemies
 Players.PlayerAdded:Connect(function(plr)
     if plr ~= LocalPlayer then
         plr.CharacterAdded:Connect(function()
@@ -71,7 +71,7 @@ Players.PlayerAdded:Connect(function(plr)
     end
 end)
 
---// Toggle system with Tab and RMB
+--// Toggle (Tab) + aiming (RMB)
 UserInputService.InputBegan:Connect(function(input, gp)
     if not gp then
         if input.KeyCode == Enum.KeyCode.Tab then
@@ -93,7 +93,7 @@ UserInputService.InputEnded:Connect(function(input, gp)
     end
 end)
 
---// Target validation
+--// Target checks
 local function IsValidTarget(plr)
     if not plr or not plr.Character or not plr.Character:FindFirstChild(Aimbot.AimPart) or not plr.Character:FindFirstChild("Humanoid") then
         return false
@@ -107,7 +107,6 @@ local function IsValidTarget(plr)
     return true
 end
 
---// Get closest enemy to crosshair
 local function GetClosestToCrosshair()
     local bestTarget = nil
     local closestDist = math.huge
@@ -133,11 +132,10 @@ local function GetClosestToCrosshair()
             end
         end
     end
-
     return bestTarget
 end
 
---// Main loop
+--// Aimbot loop
 RunService.RenderStepped:Connect(function()
     if tabToggle and aiming and Aimbot.Enabled then
         if not IsValidTarget(currentTarget) then
@@ -155,8 +153,17 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+--// Silent Aim (force bullets/rays to head)
+local mt = getrawmetatable(game)
+setreadonly(mt, false)
+local oldIndex = mt.__index
 
-
+mt.__index = newcclosure(function(self, key)
+    if key == "Hit" and currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("Head") then
+        return CFrame.new(Camera.CFrame.Position, currentTarget.Character.Head.Position)
+    end
+    return oldIndex(self, key)
+end)
 
 
 
