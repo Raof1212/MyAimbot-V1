@@ -1,12 +1,14 @@
+--// Services
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 
+--// Player references
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
--- List of teammate usernames to ignore (up to 10)
+--// Teammates list
 local TeammatesUsernames = {
     "hamza_x007j",
     "Roben121200",
@@ -29,7 +31,7 @@ local function IsTeammate(username)
     return false
 end
 
--- Aimbot Settings
+--// Aimbot Settings (unchanged)
 local Aimbot = {
     Enabled = true,
     AimPart = "Head",
@@ -40,17 +42,43 @@ local Aimbot = {
 
 local aiming = false
 local tabToggle = true
-
 local currentTarget = nil
 
--- Toggle system with Tab
+--// Hitbox Extender
+local function ExtendHitbox(plr)
+    if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+        local root = plr.Character.HumanoidRootPart
+        root.Size = Vector3.new(10, 10, 10) -- bigger hitbox
+        root.Transparency = 1 -- invisible
+        root.CanCollide = false
+    end
+end
+
+-- Apply extender to current enemies
+for _, plr in ipairs(Players:GetPlayers()) do
+    if plr ~= LocalPlayer then
+        ExtendHitbox(plr)
+    end
+end
+
+-- Apply extender on new enemies / respawns
+Players.PlayerAdded:Connect(function(plr)
+    if plr ~= LocalPlayer then
+        plr.CharacterAdded:Connect(function()
+            task.wait(1)
+            ExtendHitbox(plr)
+        end)
+    end
+end)
+
+--// Toggle system with Tab and RMB
 UserInputService.InputBegan:Connect(function(input, gp)
     if not gp then
         if input.KeyCode == Enum.KeyCode.Tab then
             tabToggle = not tabToggle
             print("Aimbot " .. (tabToggle and "Enabled" or "Disabled"))
             if not tabToggle then
-                currentTarget = nil -- clear target when aimbot off
+                currentTarget = nil
             end
         elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
             aiming = true
@@ -61,10 +89,11 @@ end)
 UserInputService.InputEnded:Connect(function(input, gp)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         aiming = false
-        currentTarget = nil -- stop targeting when right click released
+        currentTarget = nil
     end
 end)
 
+--// Target validation
 local function IsValidTarget(plr)
     if not plr or not plr.Character or not plr.Character:FindFirstChild(Aimbot.AimPart) or not plr.Character:FindFirstChild("Humanoid") then
         return false
@@ -78,6 +107,7 @@ local function IsValidTarget(plr)
     return true
 end
 
+--// Get closest enemy to crosshair
 local function GetClosestToCrosshair()
     local bestTarget = nil
     local closestDist = math.huge
@@ -88,10 +118,10 @@ local function GetClosestToCrosshair()
 
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and IsValidTarget(plr) then
-            local head = plr.Character[Aimbot.AimPart]
-            local dist3D = (head.Position - myPos).Magnitude
+            local part = plr.Character[Aimbot.AimPart]
+            local dist3D = (part.Position - myPos).Magnitude
             if dist3D <= Aimbot.MaxRange then
-                local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
+                local predictedPos = part.Position + (part.Velocity * Aimbot.Prediction)
                 local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
                 if onScreen then
                     local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
@@ -107,16 +137,16 @@ local function GetClosestToCrosshair()
     return bestTarget
 end
 
+--// Main loop
 RunService.RenderStepped:Connect(function()
     if tabToggle and aiming and Aimbot.Enabled then
-        -- If no target or target invalid, find new
         if not IsValidTarget(currentTarget) then
             currentTarget = GetClosestToCrosshair()
         end
 
         if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild(Aimbot.AimPart) then
-            local head = currentTarget.Character[Aimbot.AimPart]
-            local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
+            local part = currentTarget.Character[Aimbot.AimPart]
+            local predictedPos = part.Position + (part.Velocity * Aimbot.Prediction)
             local aimCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
             Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Aimbot.Sensitivity)
         end
@@ -124,7 +154,6 @@ RunService.RenderStepped:Connect(function()
         currentTarget = nil
     end
 end)
-
 
 
 
