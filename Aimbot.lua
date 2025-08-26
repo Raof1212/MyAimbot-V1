@@ -1,76 +1,132 @@
--- Roben V1 UI (Scrollable + Dropdown Fix)
+-- Exunys Aimbot V3 (Modified: Tab toggle, right-click aim, target lock, crosshair tracking)
 
--- Services
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
 
--- Destroy old GUI if it exists
-if playerGui:FindFirstChild("RobenV1") then
-    playerGui.RobenV1:Destroy()
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- List of teammate usernames to ignore (up to 10)
+local TeammatesUsernames = {
+    "hamza_x007j",
+    "Roben121200",
+    "ALG_DZ3",
+    "mikey7y77",
+    "haithem123k",
+    "Player6",
+    "Player7",
+    "Player8",
+    "Player9",
+    "Player10",
+}
+
+local function IsTeammate(username)
+    for _, name in ipairs(TeammatesUsernames) do
+        if name == username then
+            return true
+        end
+    end
+    return false
 end
 
--- Main ScreenGui
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RobenV1"
-screenGui.Parent = playerGui
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+-- Aimbot Settings
+local Aimbot = {
+    Enabled = true,
+    AimPart = "Head",
+    Sensitivity = 1.0, -- 1 is instant, lower is smoother
+    Prediction = 0.0,
+    MaxRange = 300,
+}
 
--- Main Frame
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 500, 0, 350)
-mainFrame.Position = UDim2.new(0.5, -250, 0.5, -175)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = screenGui
+local aiming = false
+local tabToggle = true
 
--- UICorner + Shadow
-local corner = Instance.new("UICorner", mainFrame)
-corner.CornerRadius = UDim.new(0, 10)
+local currentTarget = nil
 
--- Title
-local title = Instance.new("TextLabel")
-title.Text = "Roben V1"
-title.Font = Enum.Font.GothamBold
-title.TextSize = 20
-title.TextColor3 = Color3.fromRGB(220,220,220)
-title.BackgroundTransparency = 1
-title.Position = UDim2.new(0, 15, 0, 10)
-title.Size = UDim2.new(0, 200, 0, 25)
-title.Parent = mainFrame
+-- Toggle system with Tab
+UserInputService.InputBegan:Connect(function(input, gp)
+    if not gp then
+        if input.KeyCode == Enum.KeyCode.Tab then
+            tabToggle = not tabToggle
+            print("Aimbot " .. (tabToggle and "Enabled" or "Disabled"))
+            if not tabToggle then
+                currentTarget = nil -- clear target when aimbot off
+            end
+        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+            aiming = true
+        end
+    end
+end)
 
--- Tab Buttons Holder
-local tabHolder = Instance.new("Frame")
-tabHolder.Size = UDim2.new(0, 120, 1, -40)
-tabHolder.Position = UDim2.new(0, 0, 0, 40)
-tabHolder.BackgroundTransparency = 1
-tabHolder.Parent = mainFrame
+UserInputService.InputEnded:Connect(function(input, gp)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        aiming = false
+        currentTarget = nil -- stop targeting when right click released
+    end
+end)
 
-local tabList = Instance.new("UIListLayout", tabHolder)
-tabList.Padding = UDim.new(0, 6)
-tabList.SortOrder = Enum.SortOrder.LayoutOrder
+local function IsValidTarget(plr)
+    if not plr or not plr.Character or not plr.Character:FindFirstChild(Aimbot.AimPart) or not plr.Character:FindFirstChild("Humanoid") then
+        return false
+    end
+    if plr.Character.Humanoid.Health <= 0 then
+        return false
+    end
+    if IsTeammate(plr.Name) then
+        return false
+    end
+    return true
+end
 
--- Content Holder
-local contentFrame = Instance.new("Frame")
-contentFrame.Size = UDim2.new(1, -130, 1, -40)
-contentFrame.Position = UDim2.new(0, 130, 0, 40)
-contentFrame.BackgroundTransparency = 1
-contentFrame.ClipsDescendants = false
-contentFrame.Parent = mainFrame
+local function GetClosestToCrosshair()
+    local bestTarget = nil
+    local closestDist = math.huge
+    local mousePos = UserInputService:GetMouseLocation()
+    local myChar = LocalPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
+    local myPos = myChar.HumanoidRootPart.Position
 
--- Tab system
-local tabs = {}
-local currentTab = nil
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and IsValidTarget(plr) then
+            local head = plr.Character[Aimbot.AimPart]
+            local dist3D = (head.Position - myPos).Magnitude
+            if dist3D <= Aimbot.MaxRange then
+                local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
+                local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
+                if onScreen then
+                    local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
+                    if screenDist < closestDist then
+                        closestDist = screenDist
+                        bestTarget = plr
+                    end
+                end
+            end
+        end
+    end
 
-local function createTab(name)
-    local button = Instance.new("TextButton")
-    button.Text = name
-    button.Font = Enum.Font.Gotham
-    button.TextSize = 16
-    button.TextColor3 = Color3.fromRGB(220,220,220)
-    button.Size = UDim2.new(1, -10, 0, 30)
-    button.BackgroundColor3 = Color3.fromRGB(35,35,35)
-    button.AutoButtonColor = true
+    return bestTarget
+end
+
+RunService.RenderStepped:Connect(function()
+    if tabToggle and aiming and Aimbot.Enabled then
+        -- If no target or target invalid, find new
+        if not IsValidTarget(currentTarget) then
+            currentTarget = GetClosestToCrosshair()
+        end
+
+        if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild(Aimbot.AimPart) then
+            local head = currentTarget.Character[Aimbot.AimPart]
+            local predictedPos = head.Position + (head.Velocity * Aimbot.Prediction)
+            local aimCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
+            Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Aimbot.Sensitivity)
+        end
+    else
+        currentTarget = nil
+    end
+end)
+
     button.Parent = tabHolder
     local btnCorner = Instance.new("UICorner", button)
     btnCorner.CornerRadius = UDim.new(0, 6)
@@ -231,6 +287,7 @@ createTab("Keybinds")
 createTab("Misc")
 createTab("Themes")
 createTab("Credits")
+
 
 
 
