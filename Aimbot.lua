@@ -1,125 +1,191 @@
+-- ESP + Aim Assist + Hitbox Extension (LocalScript)
+-- Place in StarterPlayerScripts in your own game
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- Settings
-local AimbotEnabled = true
-local AimKey = Enum.UserInputType.MouseButton1 -- Left Click
-local AimPart = "Head"
-local FOV = 150
-local Smoothness = 0.2
-local TeammatesCheck = true
-
--- ESP Drawing Storage
-local ESPObjects = {}
-
--- Function to draw ESP
-function CreateESP(player)
-    if player == LocalPlayer then return end
-    local esp = {
-        Box = Drawing.new("Square"),
-        Name = Drawing.new("Text"),
-        Health = Drawing.new("Line"),
+-------------------------------------------------------
+-- CONFIG (edit these values)
+-------------------------------------------------------
+local Config = {
+    ESP = {
+        Enabled = true,
+        ShowName = true,
+        ShowHealth = true,
+        MaxDistance = 200, -- studs
+        BillboardSize = UDim2.fromOffset(120, 40),
+    },
+    AIM = {
+        Enabled = true,
+        AimKey = Enum.UserInputType.MouseButton1, -- left mouse
+        TargetPart = "Head", -- or "HumanoidRootPart"
+        MaxFOV = 200, -- pixels
+        Smoothness = 0.18, -- 0 = instant, 1 = very slow
+        IgnoreTeam = true,
+        RequireVisible = true,
+    },
+    HITBOX = {
+        Enabled = true,
+        TargetPart = "Head", -- or "HumanoidRootPart"
+        Size = Vector3.new(4, 4, 4),
+        Transparency = 0.6,
     }
-    esp.Box.Thickness = 1
-    esp.Box.Filled = false
-    esp.Box.Color = Color3.fromRGB(255, 0, 0)
+}
 
-    esp.Name.Size = 14
-    esp.Name.Color = Color3.fromRGB(255, 255, 255)
-    esp.Name.Center = true
+-------------------------------------------------------
+-- ESP setup
+-------------------------------------------------------
+local espData = {}
 
-    esp.Health.Thickness = 2
-    esp.Health.Color = Color3.fromRGB(0, 255, 0)
+local function createESP(player)
+    if espData[player] then return end
 
-    ESPObjects[player] = esp
+    -- Highlight
+    local highlight = Instance.new("Highlight")
+    highlight.Parent = player.Character or workspace
+    highlight.FillTransparency = 0.6
+    highlight.OutlineTransparency = 0.8
+
+    -- Billboard GUI
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "ESP_Billboard"
+    billboard.Size = Config.ESP.BillboardSize
+    billboard.AlwaysOnTop = true
+    billboard.Adornee = nil
+
+    local frame = Instance.new("Frame", billboard)
+    frame.Size = UDim2.new(1,0,1,0)
+    frame.BackgroundTransparency = 0.5
+    frame.BackgroundColor3 = Color3.new(0,0,0)
+
+    local nameLabel = Instance.new("TextLabel", frame)
+    nameLabel.Name = "Name"
+    nameLabel.Size = UDim2.new(1,-4,0.5,-2)
+    nameLabel.Position = UDim2.new(0,2,0,1)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextScaled = true
+    nameLabel.TextColor3 = Color3.new(1,1,1)
+
+    local healthLabel = Instance.new("TextLabel", frame)
+    healthLabel.Name = "Health"
+    healthLabel.Size = UDim2.new(1,-4,0.5,-2)
+    healthLabel.Position = UDim2.new(0,2,0.5,0)
+    healthLabel.BackgroundTransparency = 1
+    healthLabel.TextScaled = true
+    healthLabel.TextColor3 = Color3.new(0,1,0)
+
+    espData[player] = {
+        highlight = highlight,
+        billboard = billboard,
+        name = nameLabel,
+        health = healthLabel,
+    }
 end
 
--- Remove ESP when player leaves
-Players.PlayerRemoving:Connect(function(player)
-    if ESPObjects[player] then
-        for _, obj in pairs(ESPObjects[player]) do
-            obj:Remove()
-        end
-        ESPObjects[player] = nil
+local function removeESP(player)
+    local data = espData[player]
+    if data then
+        if data.highlight then data.highlight:Destroy() end
+        if data.billboard then data.billboard:Destroy() end
+        espData[player] = nil
     end
-end)
+end
 
--- Update loop
-RunService.RenderStepped:Connect(function()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local Humanoid = player.Character:FindFirstChild("Humanoid")
-            local RootPart = player.Character:FindFirstChild("HumanoidRootPart")
-            local Head = player.Character:FindFirstChild("Head")
-
-            local pos, onScreen = Camera:WorldToViewportPoint(RootPart.Position)
-            if onScreen then
-                local esp = ESPObjects[player] or CreateESP(player)
-
-                -- Box
-                esp.Box.Size = Vector2.new(1000 / pos.Z, 2000 / pos.Z)
-                esp.Box.Position = Vector2.new(pos.X - esp.Box.Size.X / 2, pos.Y - esp.Box.Size.Y / 2)
-                esp.Box.Visible = true
-
-                -- Name
-                esp.Name.Text = player.Name .. " [" .. math.floor(Humanoid.Health) .. "]"
-                esp.Name.Position = Vector2.new(pos.X, pos.Y - esp.Box.Size.Y / 2 - 15)
-                esp.Name.Visible = true
-
-                -- Health bar
-                esp.Health.From = Vector2.new(pos.X - esp.Box.Size.X / 2 - 5, pos.Y + esp.Box.Size.Y / 2)
-                esp.Health.To = Vector2.new(pos.X - esp.Box.Size.X / 2 - 5, pos.Y + esp.Box.Size.Y / 2 - (Humanoid.Health / Humanoid.MaxHealth) * esp.Box.Size.Y)
-                esp.Health.Visible = true
-            else
-                if ESPObjects[player] then
-                    ESPObjects[player].Box.Visible = false
-                    ESPObjects[player].Name.Visible = false
-                    ESPObjects[player].Health.Visible = false
-                end
-            end
-        end
+-------------------------------------------------------
+-- Hitbox Extension
+-------------------------------------------------------
+local function expandHitbox(char)
+    if not Config.HITBOX.Enabled then return end
+    local part = char:FindFirstChild(Config.HITBOX.TargetPart)
+    if part and part:IsA("BasePart") then
+        part.Size = Config.HITBOX.Size
+        part.Transparency = Config.HITBOX.Transparency
+        part.CanCollide = false
     end
-end)
+end
 
--- Aimbot
-function GetClosestTarget()
-    local closest, dist = nil, FOV
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(AimPart) then
-            if TeammatesCheck and player.Team == LocalPlayer.Team then continue end
-            local pos, onScreen = Camera:WorldToViewportPoint(player.Character[AimPart].Position)
-            if onScreen then
-                local mousePos = UserInputService:GetMouseLocation()
-                local mag = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                if mag < dist then
-                    dist = mag
-                    closest = player.Character[AimPart]
-                end
+-------------------------------------------------------
+-- Aim Assist
+-------------------------------------------------------
+local aiming = false
+
+local function getClosestTarget()
+    local closest, bestMag = nil, Config.AIM.MaxFOV+1
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        if not plr.Character or not plr.Character:FindFirstChild(Config.AIM.TargetPart) then continue end
+        if Config.AIM.IgnoreTeam and plr.Team == LocalPlayer.Team then continue end
+
+        local target = plr.Character[Config.AIM.TargetPart]
+        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
+        if onScreen then
+            local mousePos = UserInputService:GetMouseLocation()
+            local mag = (Vector2.new(pos.X,pos.Y) - mousePos).Magnitude
+            if mag < bestMag and mag <= Config.AIM.MaxFOV then
+                closest, bestMag = target, mag
             end
         end
     end
     return closest
 end
 
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.UserInputType == AimKey and AimbotEnabled then
-        RunService.RenderStepped:Connect(function()
-            local target = GetClosestTarget()
-            if target then
-                local aimPos = Camera:WorldToViewportPoint(target.Position)
-                local mousePos = UserInputService:GetMouseLocation()
-                local move = (Vector2.new(aimPos.X, aimPos.Y) - mousePos) * Smoothness
-                mousemoverel(move.X, move.Y) -- executor function
-            end
-        end)
+-------------------------------------------------------
+-- Connections
+-------------------------------------------------------
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function(char)
+        task.wait(0.2)
+        if Config.ESP.Enabled then createESP(plr) end
+        expandHitbox(char)
+        if espData[plr] then
+            espData[plr].highlight.Parent = char
+            espData[plr].highlight.Adornee = char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
+            espData[plr].billboard.Adornee = char:FindFirstChild("Head")
+            espData[plr].billboard.Parent = LocalPlayer:WaitForChild("PlayerGui")
+        end
+    end)
+end)
+
+Players.PlayerRemoving:Connect(removeESP)
+
+for _,plr in ipairs(Players:GetPlayers()) do
+    if plr ~= LocalPlayer then createESP(plr) end
+    if plr.Character then expandHitbox(plr.Character) end
+end
+
+-- Aim + ESP loop
+RunService.RenderStepped:Connect(function(dt)
+    -- Update ESP text
+    for plr,data in pairs(espData) do
+        if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+            local hum = plr.Character.Humanoid
+            data.name.Text = (Config.ESP.ShowName and plr.Name) or ""
+            data.health.Text = (Config.ESP.ShowHealth and math.floor(hum.Health).." / "..math.floor(hum.MaxHealth)) or ""
+        end
+    end
+
+    -- Aim assist
+    if Config.AIM.Enabled and aiming then
+        local target = getClosestTarget()
+        if target then
+            local cam = Camera.CFrame
+            local goal = CFrame.lookAt(cam.Position, target.Position)
+            local smooth = 1 - math.clamp(Config.AIM.Smoothness,0,0.99)
+            Camera.CFrame = cam:Lerp(goal, smooth * dt * 60)
+        end
     end
 end)
 
-
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.UserInputType == Config.AIM.AimKey then aiming = true end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Config.AIM.AimKey then aiming = false end
+end)
 
 
 
