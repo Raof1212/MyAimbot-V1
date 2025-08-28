@@ -12,7 +12,7 @@ local Camera = Workspace.CurrentCamera
 local TeammatesUsernames = {
     "hamza_x007j",
     "Roben121200",
-    "ALG_DZ3",
+    "",
     "mikey7y77",
     "haithem123k",
     "Player6",
@@ -126,6 +126,7 @@ RunService.RenderStepped:Connect(function()
         currentTarget = nil
     end
 end)
+
 
 
 
